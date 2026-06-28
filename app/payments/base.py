@@ -32,6 +32,8 @@ class PaymentStrategy(ABC):
 
     @abstractmethod
     def autorizar(self, request: PaymentRequest) -> PaymentResult:
+        ...
 
     @abstractmethod
     def consultar(self, id_transacao_externa: str) -> PaymentResult:
+        ...
