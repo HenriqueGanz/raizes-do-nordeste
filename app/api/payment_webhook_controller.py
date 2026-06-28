@@ -16,6 +16,33 @@ from app.services import loyalty_service
 
 router = APIRouter(prefix="/v1", tags=["pagamentos"])
 
+_EXEMPLO_WEBHOOK = {
+    "idempotency_key": "evt_8a7b9c2d1e",
+    "id_transacao_externa": "tx_pix_523d249506",
+    "pedido_id": "00000000-0000-0000-0000-000000000000",
+    "status": "APROVADO",
+}
+_WEBHOOK_BODY_SCHEMA = {
+    "requestBody": {
+        "required": True,
+        "content": {
+            "application/json": {
+                "schema": {
+                    "type": "object",
+                    "required": ["idempotency_key", "id_transacao_externa", "pedido_id", "status"],
+                    "properties": {
+                        "idempotency_key": {"type": "string"},
+                        "id_transacao_externa": {"type": "string"},
+                        "pedido_id": {"type": "string", "format": "uuid"},
+                        "status": {"type": "string", "enum": ["APROVADO", "RECUSADO"]},
+                    },
+                },
+                "example": _EXEMPLO_WEBHOOK,
+            }
+        },
+    }
+}
+
 
 def _assinatura_valida(corpo: bytes, assinatura: str | None) -> bool:
     if not assinatura:
@@ -26,7 +53,23 @@ def _assinatura_valida(corpo: bytes, assinatura: str | None) -> bool:
     return hmac.compare_digest(esperada, assinatura)
 
 
-@router.post("/webhooks/pagamento")
+@router.post(
+    "/webhooks/pagamento/assinatura",
+    summary="[Ferramenta de teste] Calcula o X-Signature de um corpo de webhook",
+    openapi_extra=_WEBHOOK_BODY_SCHEMA,
+)
+async def calcular_assinatura(request: Request) -> dict:
+    """Criado apenas para testar o webhook manualmente pelo
+    Swagger, cole aqui o mesmo corpo que vai enviar para `/webhooks/pagamento` e
+    use a assinatura devolvida no header `X-Signature` da chamada real. use o texto exatamente
+    igual nas duas chamadas (qualquer espaço ou quebra de linha diferente gera outra assinatura)
+    """
+    corpo = await request.body()
+    assinatura = hmac.new(settings.payment_webhook_secret.encode(), corpo, hashlib.sha256).hexdigest()
+    return {"x_signature": assinatura}
+
+
+@router.post("/webhooks/pagamento", openapi_extra=_WEBHOOK_BODY_SCHEMA)
 async def webhook_pagamento(
     request: Request,
     x_signature: str | None = Header(default=None),
