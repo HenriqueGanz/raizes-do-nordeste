@@ -15,7 +15,8 @@ from app.api.user_controller import router as user_router
 app = FastAPI(
     title="Raízes do Nordeste - API",
     version="0.1.0",
-    description="Back-end multicanal",
+    description="Projeto de Engenharia de Software (Trilha Backend) desenvolvido por Henrique Ganz, "
+    "aluno de CST Análise e Desenvolvimento de Sistemas, RU: 5115700",
 )
 
 app.include_router(auth_router)
