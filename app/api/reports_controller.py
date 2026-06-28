@@ -22,6 +22,9 @@ def relatorio_vendas(
     db: Session = Depends(get_db),
     admin: Usuario = Depends(require_papel("ADMIN")),
 ) -> dict:
+    """Mostra o faturamento por unidade, com filtro opcional de período ou de uma loja só,
+    é o relatório que a matriz usa pra acompanhar as vendas. Só ADMIN.
+    """
     linhas = report_service.vendas_por_unidade(db, unidade_id, data_inicio, data_fim)
     return {
         "filtro": {

@@ -75,6 +75,14 @@ async def webhook_pagamento(
     x_signature: str | None = Header(default=None),
     db: Session = Depends(get_db),
 ) -> dict:
+    """Confirma (ou recusa) o pagamento de um pedido. Quem chama essa rota normalmente é o
+    gateway de pagamento, não uma pessoa, por isso ela exige uma assinatura no header
+    `X-Signature`. Pra testar manualmente pelo Swagger, usa a rota
+    `/webhooks/pagamento/assinatura` primeiro pra gerar essa assinatura.
+
+    Manda `status: "APROVADO"` pro pedido virar PAGO (e o cliente ganhar pontos de fidelidade,
+    se tiver consentimento) ou `status: "RECUSADO"` pra virar PAGAMENTO_RECUSADO.
+    """
     corpo = await request.body()
     if not _assinatura_valida(corpo, x_signature):
         raise HTTPException(status_code=401, detail="Assinatura inválida.")

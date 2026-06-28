@@ -45,21 +45,33 @@ def _transicionar(db: Session, pedido_id: uuid.UUID, novo: StatusPedido, ator: U
 
 @router.post("/pedidos/{pedido_id}/aceitar")
 def aceitar(pedido_id: uuid.UUID, db: Session = Depends(get_db), ator: Usuario = Depends(_operacao)) -> dict:
+    """A cozinha aceita o pedido: passa de PAGO pra EM_PREPARO. Só funciona se o pedido já
+    estiver pago (confirmado pelo webhook) e exige login como OPERADOR ou ADMIN.
+    """
     return _transicionar(db, pedido_id, StatusPedido.EM_PREPARO, ator)
 
 
 @router.post("/pedidos/{pedido_id}/pronto")
 def marcar_pronto(pedido_id: uuid.UUID, db: Session = Depends(get_db), ator: Usuario = Depends(_operacao)) -> dict:
+    """Marca o pedido como pronto: passa de EM_PREPARO pra PRONTO. Mesma exigência de login
+    do "aceitar" (OPERADOR ou ADMIN).
+    """
     return _transicionar(db, pedido_id, StatusPedido.PRONTO, ator)
 
 
 @router.post("/pedidos/{pedido_id}/entregar")
 def entregar(pedido_id: uuid.UUID, db: Session = Depends(get_db), ator: Usuario = Depends(_operacao)) -> dict:
+    """Marca o pedido como entregue: passa de PRONTO pra ENTREGUE, fechando o ciclo dele.
+    Mesma exigência de login (OPERADOR ou ADMIN).
+    """
     return _transicionar(db, pedido_id, StatusPedido.ENTREGUE, ator)
 
 
 @router.post("/pedidos/{pedido_id}/cancelar")
 def cancelar(pedido_id: uuid.UUID, db: Session = Depends(get_db), ator: Usuario = Depends(_operacao)) -> dict:
+    """Cancela o pedido em qualquer ponto antes de ele ser entregue. Fica registrado em
+    auditoria quem cancelou. Exige login como OPERADOR ou ADMIN.
+    """
     return _transicionar(db, pedido_id, StatusPedido.CANCELADO, ator)
 
 
@@ -70,7 +82,10 @@ def aplicar_desconto(
     db: Session = Depends(get_db),
     ator: Usuario = Depends(_operacao),
 ) -> dict:
-    """aplica o desconto antes do pagamento"""
+    """Dá um desconto no pedido antes dele ser pago. Manda só `percentual` (por exemplo, 10
+    pra 10%) ou só `valor` (um desconto fixo em reais), nunca os dois juntos. Fica registrado
+    em auditoria, e exige login como OPERADOR ou ADMIN.
+    """
     if (payload.percentual is None) == (payload.valor is None):
         raise HTTPException(status_code=422, detail="Informe apenas percentual OU valor.")
 
@@ -104,7 +119,9 @@ def aplicar_desconto(
 def fila_cozinha(
     unidade_id: uuid.UUID, db: Session = Depends(get_db), ator: Usuario = Depends(_operacao)
 ) -> list[dict]:
-    """painel da cozinha, retorna os pedidos pagos, em preparo ou prontos na unidade"""
+    """É o painel que a cozinha fica acompanhando: mostra os pedidos da unidade que estão
+    PAGO, EM_PREPARO ou PRONTO. Exige login como OPERADOR ou ADMIN.
+    """
     pedidos = db.scalars(
         select(Pedido)
         .where(Pedido.unidade_id == unidade_id, Pedido.status.in_(_FILA))

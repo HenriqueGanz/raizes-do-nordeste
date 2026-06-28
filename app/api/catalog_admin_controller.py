@@ -43,6 +43,10 @@ def _auditar(db: Session, ator: Usuario, acao: str, entidade: str, detalhes: dic
 def criar_produto(
     payload: ProdutoCreate, db: Session = Depends(get_db), admin: Usuario = Depends(_admin)
 ) -> ProdutoOut:
+    """Cadastra um produto novo no catálogo central, depois cada
+    unidade decide se vai oferecer ou não. Só ADMIN pode usar essa rota, loga com
+    admin@raizesdonordeste.com.br / admin123 (login do seed) e usa o token no cadeado.
+    """
     produto = catalog_service.criar_produto(db, payload)
     _auditar(db, admin, "CRIAR_PRODUTO", "produto", {"nome": produto.nome})
     db.commit()
@@ -52,6 +56,9 @@ def criar_produto(
 
 @router.get("/produtos", response_model=list[ProdutoOut])
 def listar_produtos(db: Session = Depends(get_db), admin: Usuario = Depends(_admin)) -> list[ProdutoOut]:
+    """Lista todos os produtos do catálogo central, mesmo os que nenhuma unidade esteja vendendo
+    no momento. Só para ADMIN
+    """
     return [_to_out(p) for p in db.scalars(select(Produto).order_by(Produto.nome))]
 
 
@@ -59,6 +66,7 @@ def listar_produtos(db: Session = Depends(get_db), admin: Usuario = Depends(_adm
 def obter_produto(
     produto_id: uuid.UUID, db: Session = Depends(get_db), admin: Usuario = Depends(_admin)
 ) -> ProdutoOut:
+    """Mostra os dados de um produto especifico do catálogo central. Só para ADMIN"""
     produto = db.get(Produto, produto_id)
     if produto is None:
         raise HTTPException(status_code=404, detail="Produto não encontrado.")
@@ -72,6 +80,7 @@ def atualizar_produto(
     db: Session = Depends(get_db),
     admin: Usuario = Depends(_admin),
 ) -> ProdutoOut:
+    """Edita nome, preço base, categoria ou se o produto é sazonal. Só ADMIN."""
     produto = catalog_service.atualizar_produto(db, produto_id, payload)
     if produto is None:
         raise HTTPException(status_code=404, detail="Produto não encontrado.")
@@ -85,6 +94,7 @@ def atualizar_produto(
 def remover_produto(
     produto_id: uuid.UUID, db: Session = Depends(get_db), admin: Usuario = Depends(_admin)
 ) -> None:
+    """Remove um produto do catálogo central. Só ADMIN."""
     if not catalog_service.remover_produto(db, produto_id):
         raise HTTPException(status_code=404, detail="Produto não encontrado.")
     _auditar(db, admin, "REMOVER_PRODUTO", "produto", {"produto_id": str(produto_id)})
@@ -95,6 +105,7 @@ def remover_produto(
 def criar_unidade(
     payload: UnidadeCreate, db: Session = Depends(get_db), admin: Usuario = Depends(_admin)
 ) -> dict:
+    """Cadastra uma loja (unidade) nova na rede. Só ADMIN."""
     unidade = catalog_service.criar_unidade(db, payload)
     _auditar(db, admin, "CRIAR_UNIDADE", "unidade", {"nome": unidade.nome})
     db.commit()
@@ -109,6 +120,9 @@ def atualizar_unidade(
     db: Session = Depends(get_db),
     admin: Usuario = Depends(_admin),
 ) -> dict:
+    """Edita os dados de uma unidade já existente, ou desativa ela com o campo `ativa`. Só
+    ADMIN.
+    """
     unidade = catalog_service.atualizar_unidade(db, unidade_id, payload)
     if unidade is None:
         raise HTTPException(status_code=404, detail="Unidade não encontrada.")
@@ -125,6 +139,11 @@ def definir_disponibilidade(
     db: Session = Depends(get_db),
     admin: Usuario = Depends(_admin),
 ) -> dict:
+    """Coloca (ou atualiza) um produto no cardápio de uma unidade: define se está disponível,
+    o preço local (pode ser diferente do preço base do catálogo) e, se for sazonal, o período
+    de vigência. É assim que a Canjica junina do seed aparece só entre 01/06/2026 e 31/07/2026
+    nessa unidade. Só ADMIN.
+    """
     if db.get(Unidade, unidade_id) is None:
         raise HTTPException(status_code=404, detail="Unidade não encontrada.")
     if db.get(Produto, produto_id) is None:
@@ -154,6 +173,9 @@ def remover_disponibilidade(
     db: Session = Depends(get_db),
     admin: Usuario = Depends(_admin),
 ) -> None:
+    """Tira um produto do cardápio daquela unidade, ele continua existindo no catálogo
+    central, só não aparece mais pra essa loja. Só ADMIN.
+    """
     if not catalog_service.remover_disponibilidade(db, unidade_id, produto_id):
         raise HTTPException(status_code=404, detail="Item não está no cardápio da unidade.")
     _auditar(

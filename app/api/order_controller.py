@@ -32,7 +32,15 @@ def criar_pedido(
     payment: PaymentProcessor = Depends(get_payment_processor),
     usuario_autenticado: Usuario | None = Depends(get_current_user_opcional),
 ) -> PedidoOut:
-    """cria um pedido e solicita o pagamento ao provider"""
+    """Cria um pedido com os produtos e quantidades escolhidos. Antes de testar, pega o
+    `unidade_id` em `/unidades` e os `produto_id` no cardápio daquela unidade.
+
+    No canal `APP`, precisa estar logado (usa o cadeado do Swagger com o token de algum CLIENTE),
+    o pedido fica vinculado automaticamente a quem está logado, sem precisar mandar nenhum
+    dado de cliente no corpo. Nos canais `TOTEM`, `BALCAO` e `PICKUP` não precisa de login, mas
+    dá pra mandar o CPF do cliente demo (12345678900) pra ele ganhar pontos de fidelidade quando
+    o pagamento for confirmado.
+    """
     unidade = catalog_service.obter_unidade(db, payload.unidade_id)
     if unidade is None:
         raise HTTPException(status_code=404, detail="Unidade não encontrada ou inativa.")
@@ -110,6 +118,9 @@ def criar_pedido(
 
 @router.get("/pedidos/{pedido_id}", response_model=PedidoOut)
 def obter_pedido(pedido_id: uuid.UUID, db: Session = Depends(get_db)) -> PedidoOut:
+    """Consulta como está o pedido (status, itens e pagamento). Usa o `pedido_id` que veio na
+    resposta de quando você criou o pedido em `POST /pedidos`.
+    """
     pedido = db.get(Pedido, pedido_id)
     if pedido is None:
         raise HTTPException(status_code=404, detail="Pedido não encontrado.")

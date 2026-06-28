@@ -26,6 +26,11 @@ def registrar_consentimento(
     db: Session = Depends(get_db),
     usuario: Usuario = Depends(get_current_user),
 ) -> ConsentimentoOut:
+    """Registra que o cliente concordou (ou não) com uma finalidade de uso dos dados dele,
+    por exemplo `FIDELIDADE` (que é o que libera o acúmulo de pontos quando o pedido é pago) ou
+    `MARKETING_SEGMENTADO`. Só o próprio cliente ou um ADMIN pode registrar isso, se tentar
+    registrar pra outra pessoa retorna 403.
+    """
     exigir_self_ou_admin(cliente_id, usuario)
     cliente = db.get(Usuario, cliente_id)
     if cliente is None:
@@ -67,6 +72,10 @@ def revogar_consentimento(
     db: Session = Depends(get_db),
     usuario: Usuario = Depends(get_current_user),
 ) -> ConsentimentoOut:
+    """Revoga um consentimento que já tinha sido dado, usando o `consentimento_id` que veio na
+    resposta de quando ele foi registrado. Depois disso o consentimento para de valer, por
+    exemplo, revogar o `FIDELIDADE` faz o cliente parar de acumular pontos.
+    """
     exigir_self_ou_admin(cliente_id, usuario)
     consentimento = db.scalar(
         select(Consentimento).where(

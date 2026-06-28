@@ -14,6 +14,9 @@ router = APIRouter(prefix="/v1", tags=["cardapio"])
 
 @router.get("/unidades")
 def listar_unidades(db: Session = Depends(get_db)) -> list[dict]:
+    """Lista as lojas (unidades) cadastradas. É por aqui que você pega o `unidade_id` pra usar
+    nas outras rotas. Depois do seed, deve aparecer uma chamada "Raízes - Recife Boa Viagem".
+    """
     return [
         {
             "unidade_id": str(u.id),
@@ -33,6 +36,11 @@ def obter_cardapio(
     data: date | None = Query(default=None),
     db: Session = Depends(get_db),
 ) -> dict:
+    """Mostra o cardápio de uma unidade, já considerando o que está disponível na data escolhida
+    (por padrão, hoje). No seed tem a "Tapioca de carne de sol com queijo coalho" (R$ 18,90,
+    disponível o ano todo) e a "Canjica junina" (R$ 9,50, só aparece se a data estiver entre
+    01/06/2026 e 31/07/2026, porque é sazonal).
+    """
     unidade = catalog_service.obter_unidade(db, unidade_id)
     if unidade is None:
         raise HTTPException(status_code=404, detail="Unidade não encontrada ou inativa.")

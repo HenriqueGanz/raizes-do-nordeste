@@ -37,7 +37,9 @@ def _to_out(cliente: Usuario) -> ClienteOut:
 
 @router.post("", response_model=ClienteOut, status_code=status.HTTP_201_CREATED)
 def cadastrar_cliente(payload: ClienteCreate, db: Session = Depends(get_db)) -> ClienteOut:
-    """auto-cadastro e cliente para uso no aplicativo"""
+    """Cria uma conta de cliente nova pra usar no app. Não precisa estar logado pra isso. O
+    CPF é opcional, mas se mandar um que já existe no banco, retorna 409.
+    """
     if db.scalar(select(Usuario).where(Usuario.email == payload.email)) is not None:
         raise HTTPException(status_code=409, detail="E-mail já cadastrado.")
     if payload.cpf and user_service.buscar_por_cpf(db, payload.cpf) is not None:
@@ -55,6 +57,10 @@ def obter_cliente(
     db: Session = Depends(get_db),
     usuario: Usuario = Depends(get_current_user),
 ) -> ClienteOut:
+    """Mostra os dados de um cliente. Só funciona se você for o próprio cliente logado ou um
+    ADMIN, tentando ver os dados de outra pessoa dá 403. Testa com o `cliente_id` do usuário
+    demo que vem no seed.
+    """
     exigir_self_ou_admin(cliente_id, usuario)
     cliente = user_service.obter_cliente(db, cliente_id)
     if cliente is None:
@@ -69,6 +75,9 @@ def atualizar_cliente(
     db: Session = Depends(get_db),
     usuario: Usuario = Depends(get_current_user),
 ) -> ClienteOut:
+    """Atualiza nome, email, CPF ou data de nascimento do cliente. Mesma regra de acesso da
+    rota de consulta: só o próprio cliente logado ou um ADMIN.
+    """
     exigir_self_ou_admin(cliente_id, usuario)
     cliente = user_service.obter_cliente(db, cliente_id)
     if cliente is None:
@@ -85,7 +94,10 @@ def anonimizar_cliente(
     db: Session = Depends(get_db),
     usuario: Usuario = Depends(get_current_user),
 ) -> dict:
-    """LGPD remove os dados pessoais do cliente"""
+    """Apaga os dados pessoais do cliente (nome, email, CPF) pra atender a LGPD, é o "direito
+    ao esquecimento". O cadastro continua existindo (não é excluído), só sem nenhum dado que
+    identifique a pessoa, e não tem como desfazer depois. Só o próprio cliente ou um ADMIN.
+    """
     exigir_self_ou_admin(cliente_id, usuario)
     cliente = user_service.obter_cliente(db, cliente_id)
     if cliente is None:
@@ -109,6 +121,9 @@ def historico_pedidos(
     db: Session = Depends(get_db),
     usuario: Usuario = Depends(get_current_user),
 ) -> list[PedidoResumo]:
+    """Lista todos os pedidos que aquele cliente já fez, do mais recente pro mais antigo.
+    Mesma regra de acesso das outras rotas de cliente: só o próprio ou um ADMIN.
+    """
     exigir_self_ou_admin(cliente_id, usuario)
     pedidos = db.scalars(
         select(Pedido).where(Pedido.usuario_id == cliente_id).order_by(Pedido.criado_em.desc())
@@ -132,6 +147,10 @@ def resgatar_pontos(
     db: Session = Depends(get_db),
     usuario: Usuario = Depends(get_current_user),
 ) -> ResgateOut:
+    """Troca pontos de fidelidade por um cupom de desconto. O cliente ganha 1 ponto por real
+    gasto em cada pedido pago, mas só se tiver dado o consentimento `FIDELIDADE` antes. Se
+    pedir mais pontos do que tem de saldo, retorna 409.
+    """
     exigir_self_ou_admin(cliente_id, usuario)
     cliente = user_service.obter_cliente(db, cliente_id)
     if cliente is None:
