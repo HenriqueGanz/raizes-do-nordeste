@@ -1,0 +1,2325 @@
+{
+    "info": {
+        "_postman_id": "d4e5f6a7-b8c9-4d0e-1f2a-3b4c5d6e7f80",
+        "name": "Raizes do Nordeste - API v1",
+        "description": "Collection da API REST da rede Raizes do Nordeste (v1).\n\n## Preparacao\n1. `docker-compose up --build`\n2. `docker-compose exec api python scripts/seed_db.py`\n3. Copie o USUARIO_ID impresso para a variavel `usuario_id`.\n\n## Ordem sugerida\nAuth (Login admin/operador/cliente salvam os tokens) -> Unidades e Cardapio -> Catalogo (admin) -> Pedidos -> Fidelidade -> Operacao e Cozinha -> Webhook -> Clientes -> LGPD -> Relatorios.\n\n## Tokens e papeis\nAs rotas protegidas usam `Authorization: Bearer {{token_admin|token_operador|token_cliente}}`, preenchidos automaticamente pelas requisicoes de Login. ADMIN: catalogo e relatorios. OPERADOR: operacao/cozinha. CLIENTE: seus proprios dados, consentimentos, resgates e pedidos pelo canal APP (no app o cliente sempre esta logado; TOTEM/BALCAO/PICKUP continuam publicos, com CPF opcional para vincular pontos/historico).\n\n## Preenchido automaticamente\ntokens (login), unidade_id e produtos (listar cardapio), produto_id (criar produto), pedido_id (criar pedido), consentimento_id, x_signature (webhook).\n\n## Manual\nusuario_id (do seed) e webhook_secret (= PAYMENT_WEBHOOK_SECRET do .env).",
+        "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+    },
+    "variable": [
+        {
+            "key": "base_url",
+            "value": "http://localhost:8000",
+            "type": "string"
+        },
+        {
+            "key": "unidade_id",
+            "value": "",
+            "type": "string"
+        },
+        {
+            "key": "produto_tapioca_id",
+            "value": "",
+            "type": "string"
+        },
+        {
+            "key": "produto_canjica_id",
+            "value": "",
+            "type": "string"
+        },
+        {
+            "key": "usuario_id",
+            "value": "COLE_AQUI_O_USUARIO_ID_DO_SEED",
+            "type": "string"
+        },
+        {
+            "key": "pedido_id",
+            "value": "",
+            "type": "string"
+        },
+        {
+            "key": "consentimento_id",
+            "value": "",
+            "type": "string"
+        },
+        {
+            "key": "webhook_secret",
+            "value": "troque-este-segredo",
+            "type": "string"
+        },
+        {
+            "key": "x_signature",
+            "value": "",
+            "type": "string"
+        },
+        {
+            "key": "token_admin",
+            "value": "",
+            "type": "string"
+        },
+        {
+            "key": "token_operador",
+            "value": "",
+            "type": "string"
+        },
+        {
+            "key": "token_cliente",
+            "value": "",
+            "type": "string"
+        },
+        {
+            "key": "produto_id",
+            "value": "",
+            "type": "string"
+        },
+        {
+            "key": "pagamento_idempotency_key",
+            "value": "",
+            "type": "string"
+        },
+        {
+            "key": "pagamento_id_transacao_externa",
+            "value": "",
+            "type": "string"
+        }
+    ],
+    "item": [
+        {
+            "name": "Infraestrutura",
+            "item": [
+                {
+                    "name": "Verificar saude da API",
+                    "request": {
+                        "method": "GET",
+                        "header": [],
+                        "url": {
+                            "raw": "{{base_url}}/health",
+                            "host": [
+                                "{{base_url}}"
+                            ],
+                            "path": [
+                                "health"
+                            ]
+                        },
+                        "description": "Confere se a API está no ar. Retorna {\"status\": \"ok\"}."
+                    },
+                    "event": [
+                        {
+                            "listen": "test",
+                            "script": {
+                                "exec": [
+                                    "pm.test('Status 200', () => pm.response.to.have.status(200));",
+                                    "pm.test('status ok', () => {",
+                                    "    pm.expect(pm.response.json().status).to.eql('ok');",
+                                    "});"
+                                ],
+                                "type": "text/javascript"
+                            }
+                        }
+                    ]
+                }
+            ]
+        },
+        {
+            "name": "Auth",
+            "item": [
+                {
+                    "name": "Login admin",
+                    "request": {
+                        "method": "POST",
+                        "header": [
+                            {
+                                "key": "Content-Type",
+                                "value": "application/json"
+                            }
+                        ],
+                        "url": {
+                            "raw": "{{base_url}}/v1/auth/login",
+                            "host": [
+                                "{{base_url}}"
+                            ],
+                            "path": [
+                                "v1",
+                                "auth",
+                                "login"
+                            ]
+                        },
+                        "body": {
+                            "mode": "raw",
+                            "raw": "{\n  \"email\": \"admin@raizesdonordeste.com.br\",\n  \"senha\": \"admin123\"\n}",
+                            "options": {
+                                "raw": {
+                                    "language": "json"
+                                }
+                            }
+                        },
+                        "description": "Faz login e salva o token em token_admin."
+                    },
+                    "event": [
+                        {
+                            "listen": "test",
+                            "script": {
+                                "exec": [
+                                    "pm.test('Status 200', () => pm.response.to.have.status(200));",
+                                    "const json = pm.response.json();",
+                                    "if (json.access_token) pm.collectionVariables.set('token_admin', json.access_token);",
+                                    "console.log('token_admin salvo');"
+                                ],
+                                "type": "text/javascript"
+                            }
+                        }
+                    ]
+                },
+                {
+                    "name": "Login operador",
+                    "request": {
+                        "method": "POST",
+                        "header": [
+                            {
+                                "key": "Content-Type",
+                                "value": "application/json"
+                            }
+                        ],
+                        "url": {
+                            "raw": "{{base_url}}/v1/auth/login",
+                            "host": [
+                                "{{base_url}}"
+                            ],
+                            "path": [
+                                "v1",
+                                "auth",
+                                "login"
+                            ]
+                        },
+                        "body": {
+                            "mode": "raw",
+                            "raw": "{\n  \"email\": \"operador@raizesdonordeste.com.br\",\n  \"senha\": \"operador123\"\n}",
+                            "options": {
+                                "raw": {
+                                    "language": "json"
+                                }
+                            }
+                        },
+                        "description": "Faz login e salva o token em token_operador."
+                    },
+                    "event": [
+                        {
+                            "listen": "test",
+                            "script": {
+                                "exec": [
+                                    "pm.test('Status 200', () => pm.response.to.have.status(200));",
+                                    "const json = pm.response.json();",
+                                    "if (json.access_token) pm.collectionVariables.set('token_operador', json.access_token);",
+                                    "console.log('token_operador salvo');"
+                                ],
+                                "type": "text/javascript"
+                            }
+                        }
+                    ]
+                },
+                {
+                    "name": "Login cliente",
+                    "request": {
+                        "method": "POST",
+                        "header": [
+                            {
+                                "key": "Content-Type",
+                                "value": "application/json"
+                            }
+                        ],
+                        "url": {
+                            "raw": "{{base_url}}/v1/auth/login",
+                            "host": [
+                                "{{base_url}}"
+                            ],
+                            "path": [
+                                "v1",
+                                "auth",
+                                "login"
+                            ]
+                        },
+                        "body": {
+                            "mode": "raw",
+                            "raw": "{\n  \"email\": \"demo@raizesdonordeste.com.br\",\n  \"senha\": \"cliente123\"\n}",
+                            "options": {
+                                "raw": {
+                                    "language": "json"
+                                }
+                            }
+                        },
+                        "description": "Faz login e salva o token em token_cliente."
+                    },
+                    "event": [
+                        {
+                            "listen": "test",
+                            "script": {
+                                "exec": [
+                                    "pm.test('Status 200', () => pm.response.to.have.status(200));",
+                                    "const json = pm.response.json();",
+                                    "if (json.access_token) pm.collectionVariables.set('token_cliente', json.access_token);",
+                                    "console.log('token_cliente salvo');"
+                                ],
+                                "type": "text/javascript"
+                            }
+                        }
+                    ]
+                }
+            ]
+        },
+        {
+            "name": "Unidades e Cardapio",
+            "item": [
+                {
+                    "name": "Listar unidades",
+                    "request": {
+                        "method": "GET",
+                        "header": [],
+                        "url": {
+                            "raw": "{{base_url}}/v1/unidades",
+                            "host": [
+                                "{{base_url}}"
+                            ],
+                            "path": [
+                                "v1",
+                                "unidades"
+                            ]
+                        },
+                        "description": "Lista as lojas ativas. Salva a primeira unidade em unidade_id para as próximas requisições."
+                    },
+                    "event": [
+                        {
+                            "listen": "test",
+                            "script": {
+                                "exec": [
+                                    "pm.test('Status 200', () => pm.response.to.have.status(200));",
+                                    "",
+                                    "const unidades = pm.response.json();",
+                                    "pm.test('Retorna ao menos uma unidade', () => {",
+                                    "    pm.expect(unidades).to.be.an('array').and.to.have.length.above(0);",
+                                    "});",
+                                    "",
+                                    "// Salva a primeira unidade para os próximos requests",
+                                    "if (unidades.length > 0) {",
+                                    "    pm.collectionVariables.set('unidade_id', unidades[0].unidade_id);",
+                                    "    console.log('unidade_id salvo:', unidades[0].unidade_id);",
+                                    "}"
+                                ],
+                                "type": "text/javascript"
+                            }
+                        }
+                    ]
+                },
+                {
+                    "name": "Listar cardapio da unidade",
+                    "request": {
+                        "method": "GET",
+                        "header": [],
+                        "url": {
+                            "raw": "{{base_url}}/v1/unidades/{{unidade_id}}/cardapio",
+                            "host": [
+                                "{{base_url}}"
+                            ],
+                            "path": [
+                                "v1",
+                                "unidades",
+                                "{{unidade_id}}",
+                                "cardapio"
+                            ]
+                        },
+                        "description": "Lista os produtos disponíveis na unidade hoje. Salva os IDs da tapioca e da canjica para os pedidos."
+                    },
+                    "event": [
+                        {
+                            "listen": "test",
+                            "script": {
+                                "exec": [
+                                    "pm.test('Status 200', () => pm.response.to.have.status(200));",
+                                    "",
+                                    "const json = pm.response.json();",
+                                    "pm.test('Tem array itens', () => {",
+                                    "    pm.expect(json).to.have.property('itens');",
+                                    "    pm.expect(json.itens).to.be.an('array');",
+                                    "});",
+                                    "",
+                                    "// Salva IDs de produto para usar nos pedidos",
+                                    "const tapioca = json.itens.find(i => i.categoria === 'tapioca');",
+                                    "const canjica = json.itens.find(i => i.nome.toLowerCase().includes('canjica'));",
+                                    "if (tapioca) {",
+                                    "    pm.collectionVariables.set('produto_tapioca_id', tapioca.produto_id);",
+                                    "    console.log('produto_tapioca_id salvo:', tapioca.produto_id);",
+                                    "}",
+                                    "if (canjica) {",
+                                    "    pm.collectionVariables.set('produto_canjica_id', canjica.produto_id);",
+                                    "    console.log('produto_canjica_id salvo:', canjica.produto_id);",
+                                    "}"
+                                ],
+                                "type": "text/javascript"
+                            }
+                        }
+                    ]
+                },
+                {
+                    "name": "Filtrar cardapio por categoria",
+                    "request": {
+                        "method": "GET",
+                        "header": [],
+                        "url": {
+                            "raw": "{{base_url}}/v1/unidades/{{unidade_id}}/cardapio?categoria=tapioca",
+                            "host": [
+                                "{{base_url}}"
+                            ],
+                            "path": [
+                                "v1",
+                                "unidades",
+                                "{{unidade_id}}",
+                                "cardapio"
+                            ],
+                            "query": [
+                                {
+                                    "key": "categoria",
+                                    "value": "tapioca"
+                                }
+                            ]
+                        },
+                        "description": "Filtra apenas os itens da categoria tapioca."
+                    },
+                    "event": [
+                        {
+                            "listen": "test",
+                            "script": {
+                                "exec": [
+                                    "pm.test('Status 200', () => pm.response.to.have.status(200));",
+                                    "pm.test('Todos itens são tapioca', () => {",
+                                    "    const itens = pm.response.json().itens;",
+                                    "    itens.forEach(i => pm.expect(i.categoria).to.eql('tapioca'));",
+                                    "});"
+                                ],
+                                "type": "text/javascript"
+                            }
+                        }
+                    ]
+                },
+                {
+                    "name": "Cardapio em data junina",
+                    "request": {
+                        "method": "GET",
+                        "header": [],
+                        "url": {
+                            "raw": "{{base_url}}/v1/unidades/{{unidade_id}}/cardapio?data=2026-06-15",
+                            "host": [
+                                "{{base_url}}"
+                            ],
+                            "path": [
+                                "v1",
+                                "unidades",
+                                "{{unidade_id}}",
+                                "cardapio"
+                            ],
+                            "query": [
+                                {
+                                    "key": "data",
+                                    "value": "2026-06-15"
+                                }
+                            ]
+                        },
+                        "description": "Data dentro da vigência junina (jun-jul). A canjica deve aparecer no resultado."
+                    },
+                    "event": [
+                        {
+                            "listen": "test",
+                            "script": {
+                                "exec": [
+                                    "pm.test('Status 200', () => pm.response.to.have.status(200));",
+                                    "pm.test('Canjica presente no período junino', () => {",
+                                    "    const nomes = pm.response.json().itens.map(i => i.nome);",
+                                    "    pm.expect(nomes.some(n => n.toLowerCase().includes('canjica'))).to.be.true;",
+                                    "});"
+                                ],
+                                "type": "text/javascript"
+                            }
+                        }
+                    ]
+                },
+                {
+                    "name": "Cardapio fora da data junina",
+                    "request": {
+                        "method": "GET",
+                        "header": [],
+                        "url": {
+                            "raw": "{{base_url}}/v1/unidades/{{unidade_id}}/cardapio?data=2026-09-01",
+                            "host": [
+                                "{{base_url}}"
+                            ],
+                            "path": [
+                                "v1",
+                                "unidades",
+                                "{{unidade_id}}",
+                                "cardapio"
+                            ],
+                            "query": [
+                                {
+                                    "key": "data",
+                                    "value": "2026-09-01"
+                                }
+                            ]
+                        },
+                        "description": "Setembro está fora da vigência da canjica (1 jun-31 jul). Ela não deve aparecer."
+                    },
+                    "event": [
+                        {
+                            "listen": "test",
+                            "script": {
+                                "exec": [
+                                    "pm.test('Status 200', () => pm.response.to.have.status(200));",
+                                    "pm.test('Canjica ausente fora do período', () => {",
+                                    "    const nomes = pm.response.json().itens.map(i => i.nome);",
+                                    "    pm.expect(nomes.some(n => n.toLowerCase().includes('canjica'))).to.be.false;",
+                                    "});"
+                                ],
+                                "type": "text/javascript"
+                            }
+                        }
+                    ]
+                },
+                {
+                    "name": "Cardapio de unidade inexistente",
+                    "request": {
+                        "method": "GET",
+                        "header": [],
+                        "url": {
+                            "raw": "{{base_url}}/v1/unidades/00000000-0000-0000-0000-000000000000/cardapio",
+                            "host": [
+                                "{{base_url}}"
+                            ],
+                            "path": [
+                                "v1",
+                                "unidades",
+                                "00000000-0000-0000-0000-000000000000",
+                                "cardapio"
+                            ]
+                        },
+                        "description": "Unidade que não existe deve retornar 404."
+                    },
+                    "event": [
+                        {
+                            "listen": "test",
+                            "script": {
+                                "exec": [
+                                    "pm.test('404 Not Found', () => pm.response.to.have.status(404));"
+                                ],
+                                "type": "text/javascript"
+                            }
+                        }
+                    ]
+                }
+            ]
+        },
+        {
+            "name": "Catalogo (admin)",
+            "description": "Gestao do catalogo pela matriz. Requer token_admin (rode Login admin antes).",
+            "item": [
+                {
+                    "name": "Criar produto",
+                    "request": {
+                        "method": "POST",
+                        "header": [
+                            {
+                                "key": "Content-Type",
+                                "value": "application/json"
+                            },
+                            {
+                                "key": "Authorization",
+                                "value": "Bearer {{token_admin}}"
+                            }
+                        ],
+                        "url": {
+                            "raw": "{{base_url}}/v1/produtos",
+                            "host": [
+                                "{{base_url}}"
+                            ],
+                            "path": [
+                                "v1",
+                                "produtos"
+                            ]
+                        },
+                        "body": {
+                            "mode": "raw",
+                            "raw": "{\n  \"nome\": \"Bolo de rolo\",\n  \"preco_base\": \"12.00\",\n  \"categoria\": \"doce\",\n  \"sazonal\": false\n}",
+                            "options": {
+                                "raw": {
+                                    "language": "json"
+                                }
+                            }
+                        },
+                        "description": "Cria um produto no catalogo central. Salva produto_id."
+                    },
+                    "event": [
+                        {
+                            "listen": "test",
+                            "script": {
+                                "exec": [
+                                    "pm.test('Status 201', () => pm.response.to.have.status(201));",
+                                    "const json = pm.response.json();",
+                                    "if (json.produto_id) pm.collectionVariables.set('produto_id', json.produto_id);",
+                                    "console.log('produto_id salvo:', json.produto_id);"
+                                ],
+                                "type": "text/javascript"
+                            }
+                        }
+                    ]
+                },
+                {
+                    "name": "Listar produtos",
+                    "request": {
+                        "method": "GET",
+                        "header": [
+                            {
+                                "key": "Authorization",
+                                "value": "Bearer {{token_admin}}"
+                            }
+                        ],
+                        "url": {
+                            "raw": "{{base_url}}/v1/produtos",
+                            "host": [
+                                "{{base_url}}"
+                            ],
+                            "path": [
+                                "v1",
+                                "produtos"
+                            ]
+                        },
+                        "description": "Lista o catalogo central."
+                    },
+                    "event": [
+                        {
+                            "listen": "test",
+                            "script": {
+                                "exec": [
+                                    "pm.test('Status 200', () => pm.response.to.have.status(200));"
+                                ],
+                                "type": "text/javascript"
+                            }
+                        }
+                    ]
+                },
+                {
+                    "name": "Atualizar produto",
+                    "request": {
+                        "method": "PUT",
+                        "header": [
+                            {
+                                "key": "Content-Type",
+                                "value": "application/json"
+                            },
+                            {
+                                "key": "Authorization",
+                                "value": "Bearer {{token_admin}}"
+                            }
+                        ],
+                        "url": {
+                            "raw": "{{base_url}}/v1/produtos/{{produto_id}}",
+                            "host": [
+                                "{{base_url}}"
+                            ],
+                            "path": [
+                                "v1",
+                                "produtos",
+                                "{{produto_id}}"
+                            ]
+                        },
+                        "body": {
+                            "mode": "raw",
+                            "raw": "{\n  \"preco_base\": \"13.50\"\n}",
+                            "options": {
+                                "raw": {
+                                    "language": "json"
+                                }
+                            }
+                        },
+                        "description": "Atualiza o preco-base do produto."
+                    },
+                    "event": [
+                        {
+                            "listen": "test",
+                            "script": {
+                                "exec": [
+                                    "pm.test('Status 200', () => pm.response.to.have.status(200));"
+                                ],
+                                "type": "text/javascript"
+                            }
+                        }
+                    ]
+                },
+                {
+                    "name": "Publicar no cardapio da unidade",
+                    "request": {
+                        "method": "PUT",
+                        "header": [
+                            {
+                                "key": "Content-Type",
+                                "value": "application/json"
+                            },
+                            {
+                                "key": "Authorization",
+                                "value": "Bearer {{token_admin}}"
+                            }
+                        ],
+                        "url": {
+                            "raw": "{{base_url}}/v1/unidades/{{unidade_id}}/cardapio/{{produto_id}}",
+                            "host": [
+                                "{{base_url}}"
+                            ],
+                            "path": [
+                                "v1",
+                                "unidades",
+                                "{{unidade_id}}",
+                                "cardapio",
+                                "{{produto_id}}"
+                            ]
+                        },
+                        "body": {
+                            "mode": "raw",
+                            "raw": "{\n  \"preco_local\": \"11.00\",\n  \"disponivel\": true,\n  \"quantidade_estoque\": 20\n}",
+                            "options": {
+                                "raw": {
+                                    "language": "json"
+                                }
+                            }
+                        },
+                        "description": "Define a disponibilidade local (preco, estoque, vigencia) do produto na unidade."
+                    },
+                    "event": [
+                        {
+                            "listen": "test",
+                            "script": {
+                                "exec": [
+                                    "pm.test('Status 200', () => pm.response.to.have.status(200));"
+                                ],
+                                "type": "text/javascript"
+                            }
+                        }
+                    ]
+                },
+                {
+                    "name": "Remover do cardapio",
+                    "request": {
+                        "method": "DELETE",
+                        "header": [
+                            {
+                                "key": "Authorization",
+                                "value": "Bearer {{token_admin}}"
+                            }
+                        ],
+                        "url": {
+                            "raw": "{{base_url}}/v1/unidades/{{unidade_id}}/cardapio/{{produto_id}}",
+                            "host": [
+                                "{{base_url}}"
+                            ],
+                            "path": [
+                                "v1",
+                                "unidades",
+                                "{{unidade_id}}",
+                                "cardapio",
+                                "{{produto_id}}"
+                            ]
+                        },
+                        "description": "Tira o produto do cardapio da unidade."
+                    },
+                    "event": [
+                        {
+                            "listen": "test",
+                            "script": {
+                                "exec": [
+                                    "pm.test('Status 204', () => pm.response.to.have.status(204));"
+                                ],
+                                "type": "text/javascript"
+                            }
+                        }
+                    ]
+                },
+                {
+                    "name": "Criar unidade",
+                    "request": {
+                        "method": "POST",
+                        "header": [
+                            {
+                                "key": "Content-Type",
+                                "value": "application/json"
+                            },
+                            {
+                                "key": "Authorization",
+                                "value": "Bearer {{token_admin}}"
+                            }
+                        ],
+                        "url": {
+                            "raw": "{{base_url}}/v1/unidades",
+                            "host": [
+                                "{{base_url}}"
+                            ],
+                            "path": [
+                                "v1",
+                                "unidades"
+                            ]
+                        },
+                        "body": {
+                            "mode": "raw",
+                            "raw": "{\n  \"nome\": \"Raizes - Olinda\",\n  \"regiao\": \"Nordeste\",\n  \"cidade\": \"Olinda\"\n}",
+                            "options": {
+                                "raw": {
+                                    "language": "json"
+                                }
+                            }
+                        },
+                        "description": "Cria uma nova unidade (loja)."
+                    },
+                    "event": [
+                        {
+                            "listen": "test",
+                            "script": {
+                                "exec": [
+                                    "pm.test('Status 201', () => pm.response.to.have.status(201));"
+                                ],
+                                "type": "text/javascript"
+                            }
+                        }
+                    ]
+                },
+                {
+                    "name": "Remover produto",
+                    "request": {
+                        "method": "DELETE",
+                        "header": [
+                            {
+                                "key": "Authorization",
+                                "value": "Bearer {{token_admin}}"
+                            }
+                        ],
+                        "url": {
+                            "raw": "{{base_url}}/v1/produtos/{{produto_id}}",
+                            "host": [
+                                "{{base_url}}"
+                            ],
+                            "path": [
+                                "v1",
+                                "produtos",
+                                "{{produto_id}}"
+                            ]
+                        },
+                        "description": "Remove o produto do catalogo."
+                    },
+                    "event": [
+                        {
+                            "listen": "test",
+                            "script": {
+                                "exec": [
+                                    "pm.test('Status 204', () => pm.response.to.have.status(204));"
+                                ],
+                                "type": "text/javascript"
+                            }
+                        }
+                    ]
+                },
+                {
+                    "name": "Acesso negado sem admin (403)",
+                    "request": {
+                        "method": "POST",
+                        "header": [
+                            {
+                                "key": "Content-Type",
+                                "value": "application/json"
+                            },
+                            {
+                                "key": "Authorization",
+                                "value": "Bearer {{token_cliente}}"
+                            }
+                        ],
+                        "url": {
+                            "raw": "{{base_url}}/v1/produtos",
+                            "host": [
+                                "{{base_url}}"
+                            ],
+                            "path": [
+                                "v1",
+                                "produtos"
+                            ]
+                        },
+                        "body": {
+                            "mode": "raw",
+                            "raw": "{\n  \"nome\": \"X\",\n  \"preco_base\": \"1.00\",\n  \"categoria\": \"y\"\n}",
+                            "options": {
+                                "raw": {
+                                    "language": "json"
+                                }
+                            }
+                        },
+                        "description": "Cliente tentando criar produto deve receber 403."
+                    },
+                    "event": [
+                        {
+                            "listen": "test",
+                            "script": {
+                                "exec": [
+                                    "pm.test('403 Forbidden', () => pm.response.to.have.status(403));"
+                                ],
+                                "type": "text/javascript"
+                            }
+                        }
+                    ]
+                }
+            ]
+        },
+        {
+            "name": "Pedidos",
+            "item": [
+                {
+                    "name": "Criar pedido com PIX no totem",
+                    "request": {
+                        "method": "POST",
+                        "header": [
+                            {
+                                "key": "Content-Type",
+                                "value": "application/json"
+                            }
+                        ],
+                        "body": {
+                            "mode": "raw",
+                            "raw": "{\n  \"unidade_id\": \"{{unidade_id}}\",\n  \"canal\": \"TOTEM\",\n  \"itens\": [\n    { \"produto_id\": \"{{produto_tapioca_id}}\", \"quantidade\": 2 },\n    { \"produto_id\": \"{{produto_canjica_id}}\", \"quantidade\": 1 }\n  ],\n  \"metodo_pagamento\": \"PIX\"\n}",
+                            "options": {
+                                "raw": {
+                                    "language": "json"
+                                }
+                            }
+                        },
+                        "url": {
+                            "raw": "{{base_url}}/v1/pedidos",
+                            "host": [
+                                "{{base_url}}"
+                            ],
+                            "path": [
+                                "v1",
+                                "pedidos"
+                            ]
+                        },
+                        "description": "Cria pedido com 2 tapiocas + 1 canjica. O pedido_id é salvo automaticamente."
+                    },
+                    "event": [
+                        {
+                            "listen": "test",
+                            "script": {
+                                "exec": [
+                                    "pm.test('Status 201', () => pm.response.to.have.status(201));",
+                                    "",
+                                    "const json = pm.response.json();",
+                                    "",
+                                    "pm.test('Status AGUARDANDO_PAGAMENTO', () => {",
+                                    "    pm.expect(json.status).to.eql('AGUARDANDO_PAGAMENTO');",
+                                    "});",
+                                    "",
+                                    "pm.test('Pagamento PIX PENDENTE', () => {",
+                                    "    pm.expect(json.pagamento.metodo).to.eql('PIX');",
+                                    "    pm.expect(json.pagamento.status).to.eql('PENDENTE');",
+                                    "});",
+                                    "",
+                                    "pm.test('valor_total positivo', () => {",
+                                    "    pm.expect(json.valor_total).to.be.above(0);",
+                                    "});",
+                                    "",
+                                    "if (json.pedido_id) {",
+                                    "    pm.collectionVariables.set('pedido_id', json.pedido_id);",
+                                    "    console.log('pedido_id salvo:', json.pedido_id);",
+                                    "}",
+                                    "",
+                                    "// Captura os identificadores reais do pagamento para usar no Webhook",
+                                    "if (json.pagamento && json.pagamento.idempotency_key) {",
+                                    "    pm.collectionVariables.set('pagamento_idempotency_key', json.pagamento.idempotency_key);",
+                                    "    console.log('pagamento_idempotency_key salvo:', json.pagamento.idempotency_key);",
+                                    "}",
+                                    "if (json.pagamento && json.pagamento.id_transacao_externa) {",
+                                    "    pm.collectionVariables.set('pagamento_id_transacao_externa', json.pagamento.id_transacao_externa);",
+                                    "}"
+                                ],
+                                "type": "text/javascript"
+                            }
+                        }
+                    ]
+                },
+                {
+                    "name": "Criar pedido com cartao no app",
+                    "request": {
+                        "method": "POST",
+                        "header": [
+                            {
+                                "key": "Content-Type",
+                                "value": "application/json"
+                            },
+                            {
+                                "key": "Authorization",
+                                "value": "Bearer {{token_cliente}}"
+                            }
+                        ],
+                        "body": {
+                            "mode": "raw",
+                            "raw": "{\n  \"unidade_id\": \"{{unidade_id}}\",\n  \"canal\": \"APP\",\n  \"itens\": [\n    { \"produto_id\": \"{{produto_tapioca_id}}\", \"quantidade\": 1 }\n  ],\n  \"metodo_pagamento\": \"CARTAO_CREDITO\"\n}",
+                            "options": {
+                                "raw": {
+                                    "language": "json"
+                                }
+                            }
+                        },
+                        "url": {
+                            "raw": "{{base_url}}/v1/pedidos",
+                            "host": [
+                                "{{base_url}}"
+                            ],
+                            "path": [
+                                "v1",
+                                "pedidos"
+                            ]
+                        },
+                        "description": "Pedido pelo app exige cliente autenticado (Authorization: Bearer). O usuario vem do token, nao de um campo no corpo -- por isso nao existe campo de cliente_id/cpf aqui. Atualiza o pedido_id para o mais recente."
+                    },
+                    "event": [
+                        {
+                            "listen": "test",
+                            "script": {
+                                "exec": [
+                                    "pm.test('Status 201', () => pm.response.to.have.status(201));",
+                                    "pm.test('Canal APP', () => pm.expect(pm.response.json().canal).to.eql('APP'));",
+                                    "const json = pm.response.json();",
+                                    "if (json.pedido_id) pm.collectionVariables.set('pedido_id', json.pedido_id);",
+                                    "",
+                                    "// Captura os identificadores reais do pagamento para usar no Webhook",
+                                    "if (json.pagamento && json.pagamento.idempotency_key) {",
+                                    "    pm.collectionVariables.set('pagamento_idempotency_key', json.pagamento.idempotency_key);",
+                                    "    console.log('pagamento_idempotency_key salvo:', json.pagamento.idempotency_key);",
+                                    "}",
+                                    "if (json.pagamento && json.pagamento.id_transacao_externa) {",
+                                    "    pm.collectionVariables.set('pagamento_id_transacao_externa', json.pagamento.id_transacao_externa);",
+                                    "}"
+                                ],
+                                "type": "text/javascript"
+                            }
+                        }
+                    ]
+                },
+                {
+                    "name": "Criar pedido no app sem autenticacao (401)",
+                    "request": {
+                        "method": "POST",
+                        "header": [
+                            {
+                                "key": "Content-Type",
+                                "value": "application/json"
+                            }
+                        ],
+                        "body": {
+                            "mode": "raw",
+                            "raw": "{\n  \"unidade_id\": \"{{unidade_id}}\",\n  \"canal\": \"APP\",\n  \"itens\": [\n    {\n      \"produto_id\": \"{{produto_tapioca_id}}\",\n      \"quantidade\": 1\n    }\n  ],\n  \"metodo_pagamento\": \"PIX\"\n}",
+                            "options": {
+                                "raw": {
+                                    "language": "json"
+                                }
+                            }
+                        },
+                        "url": {
+                            "raw": "{{base_url}}/v1/pedidos",
+                            "host": [
+                                "{{base_url}}"
+                            ],
+                            "path": [
+                                "v1",
+                                "pedidos"
+                            ]
+                        },
+                        "description": "Sem token, o canal APP deve recusar o pedido: o cliente precisa estar logado."
+                    },
+                    "event": [
+                        {
+                            "listen": "test",
+                            "script": {
+                                "exec": [
+                                    "pm.test('401 Unauthorized', () => pm.response.to.have.status(401));"
+                                ],
+                                "type": "text/javascript"
+                            }
+                        }
+                    ]
+                },
+                {
+                    "name": "Criar pedido com produto invalido",
+                    "request": {
+                        "method": "POST",
+                        "header": [
+                            {
+                                "key": "Content-Type",
+                                "value": "application/json"
+                            }
+                        ],
+                        "body": {
+                            "mode": "raw",
+                            "raw": "{\n  \"unidade_id\": \"{{unidade_id}}\",\n  \"canal\": \"BALCAO\",\n  \"itens\": [\n    { \"produto_id\": \"00000000-0000-0000-0000-000000000000\", \"quantidade\": 1 }\n  ],\n  \"metodo_pagamento\": \"PIX\"\n}",
+                            "options": {
+                                "raw": {
+                                    "language": "json"
+                                }
+                            }
+                        },
+                        "url": {
+                            "raw": "{{base_url}}/v1/pedidos",
+                            "host": [
+                                "{{base_url}}"
+                            ],
+                            "path": [
+                                "v1",
+                                "pedidos"
+                            ]
+                        },
+                        "description": "Produto que não existe na unidade deve retornar 422 e não persistir o pedido."
+                    },
+                    "event": [
+                        {
+                            "listen": "test",
+                            "script": {
+                                "exec": [
+                                    "pm.test('422 Unprocessable Entity', () => pm.response.to.have.status(422));"
+                                ],
+                                "type": "text/javascript"
+                            }
+                        }
+                    ]
+                },
+                {
+                    "name": "Consultar pedido",
+                    "request": {
+                        "method": "GET",
+                        "header": [],
+                        "url": {
+                            "raw": "{{base_url}}/v1/pedidos/{{pedido_id}}",
+                            "host": [
+                                "{{base_url}}"
+                            ],
+                            "path": [
+                                "v1",
+                                "pedidos",
+                                "{{pedido_id}}"
+                            ]
+                        },
+                        "description": "Consulta o pedido criado. Use depois do webhook para ver a mudança de status."
+                    },
+                    "event": [
+                        {
+                            "listen": "test",
+                            "script": {
+                                "exec": [
+                                    "pm.test('Status 200', () => pm.response.to.have.status(200));",
+                                    "pm.test('Tem pedido_id', () => {",
+                                    "    pm.expect(pm.response.json()).to.have.property('pedido_id');",
+                                    "});",
+                                    "console.log('Status atual do pedido:', pm.response.json().status);"
+                                ],
+                                "type": "text/javascript"
+                            }
+                        }
+                    ]
+                },
+                {
+                    "name": "Consultar pedido inexistente",
+                    "request": {
+                        "method": "GET",
+                        "header": [],
+                        "url": {
+                            "raw": "{{base_url}}/v1/pedidos/00000000-0000-0000-0000-000000000000",
+                            "host": [
+                                "{{base_url}}"
+                            ],
+                            "path": [
+                                "v1",
+                                "pedidos",
+                                "00000000-0000-0000-0000-000000000000"
+                            ]
+                        },
+                        "description": "Pedido que não existe deve retornar 404."
+                    },
+                    "event": [
+                        {
+                            "listen": "test",
+                            "script": {
+                                "exec": [
+                                    "pm.test('404 Not Found', () => pm.response.to.have.status(404));"
+                                ],
+                                "type": "text/javascript"
+                            }
+                        }
+                    ]
+                }
+            ]
+        },
+        {
+            "name": "Fidelidade",
+            "description": "Acumulo e resgate de pontos. O cliente demo (CPF 12345678900) tem consentimento FIDELIDADE.",
+            "item": [
+                {
+                    "name": "Pedido com CPF (acumula pontos)",
+                    "request": {
+                        "method": "POST",
+                        "header": [
+                            {
+                                "key": "Content-Type",
+                                "value": "application/json"
+                            }
+                        ],
+                        "url": {
+                            "raw": "{{base_url}}/v1/pedidos",
+                            "host": [
+                                "{{base_url}}"
+                            ],
+                            "path": [
+                                "v1",
+                                "pedidos"
+                            ]
+                        },
+                        "body": {
+                            "mode": "raw",
+                            "raw": "{\n  \"unidade_id\": \"{{unidade_id}}\",\n  \"cpf\": \"12345678900\",\n  \"canal\": \"TOTEM\",\n  \"metodo_pagamento\": \"PIX\",\n  \"itens\": [\n    {\n      \"produto_id\": \"{{produto_tapioca_id}}\",\n      \"quantidade\": 1\n    }\n  ]\n}",
+                            "options": {
+                                "raw": {
+                                    "language": "json"
+                                }
+                            }
+                        },
+                        "description": "Pedido no totem informando o CPF: vincula o cliente e acumula pontos ao pagar. Salva pedido_id."
+                    },
+                    "event": [
+                        {
+                            "listen": "test",
+                            "script": {
+                                "exec": [
+                                    "pm.test('Status 201', () => pm.response.to.have.status(201));",
+                                    "const json = pm.response.json();",
+                                    "if (json.pedido_id) pm.collectionVariables.set('pedido_id', json.pedido_id);"
+                                ],
+                                "type": "text/javascript"
+                            }
+                        }
+                    ]
+                },
+                {
+                    "name": "Resgatar pontos",
+                    "request": {
+                        "method": "POST",
+                        "header": [
+                            {
+                                "key": "Content-Type",
+                                "value": "application/json"
+                            },
+                            {
+                                "key": "Authorization",
+                                "value": "Bearer {{token_cliente}}"
+                            }
+                        ],
+                        "url": {
+                            "raw": "{{base_url}}/v1/clientes/{{usuario_id}}/resgates",
+                            "host": [
+                                "{{base_url}}"
+                            ],
+                            "path": [
+                                "v1",
+                                "clientes",
+                                "{{usuario_id}}",
+                                "resgates"
+                            ]
+                        },
+                        "body": {
+                            "mode": "raw",
+                            "raw": "{\n  \"pontos\": 10\n}",
+                            "options": {
+                                "raw": {
+                                    "language": "json"
+                                }
+                            }
+                        },
+                        "description": "Troca pontos por um cupom. Saldo insuficiente retorna 409."
+                    },
+                    "event": [
+                        {
+                            "listen": "test",
+                            "script": {
+                                "exec": [
+                                    "pm.test('Status 201', () => pm.response.to.have.status(201));",
+                                    "pm.test('Tem cupom', () => pm.expect(pm.response.json().cupom).to.include('RAIZ-'));"
+                                ],
+                                "type": "text/javascript"
+                            }
+                        }
+                    ]
+                }
+            ]
+        },
+        {
+            "name": "Operacao e Cozinha",
+            "description": "Avancar o pedido no fluxo. Requer token_operador. Use o pedido_id de um pedido PAGO.",
+            "item": [
+                {
+                    "name": "Aceitar pedido (EM_PREPARO)",
+                    "request": {
+                        "method": "POST",
+                        "header": [
+                            {
+                                "key": "Authorization",
+                                "value": "Bearer {{token_operador}}"
+                            }
+                        ],
+                        "url": {
+                            "raw": "{{base_url}}/v1/pedidos/{{pedido_id}}/aceitar",
+                            "host": [
+                                "{{base_url}}"
+                            ],
+                            "path": [
+                                "v1",
+                                "pedidos",
+                                "{{pedido_id}}",
+                                "aceitar"
+                            ]
+                        },
+                        "description": "PAGO -> EM_PREPARO."
+                    },
+                    "event": [
+                        {
+                            "listen": "test",
+                            "script": {
+                                "exec": [
+                                    "pm.test('Status 200', () => pm.response.to.have.status(200));"
+                                ],
+                                "type": "text/javascript"
+                            }
+                        }
+                    ]
+                },
+                {
+                    "name": "Marcar pronto",
+                    "request": {
+                        "method": "POST",
+                        "header": [
+                            {
+                                "key": "Authorization",
+                                "value": "Bearer {{token_operador}}"
+                            }
+                        ],
+                        "url": {
+                            "raw": "{{base_url}}/v1/pedidos/{{pedido_id}}/pronto",
+                            "host": [
+                                "{{base_url}}"
+                            ],
+                            "path": [
+                                "v1",
+                                "pedidos",
+                                "{{pedido_id}}",
+                                "pronto"
+                            ]
+                        },
+                        "description": "EM_PREPARO -> PRONTO."
+                    },
+                    "event": [
+                        {
+                            "listen": "test",
+                            "script": {
+                                "exec": [
+                                    "pm.test('Status 200', () => pm.response.to.have.status(200));"
+                                ],
+                                "type": "text/javascript"
+                            }
+                        }
+                    ]
+                },
+                {
+                    "name": "Entregar",
+                    "request": {
+                        "method": "POST",
+                        "header": [
+                            {
+                                "key": "Authorization",
+                                "value": "Bearer {{token_operador}}"
+                            }
+                        ],
+                        "url": {
+                            "raw": "{{base_url}}/v1/pedidos/{{pedido_id}}/entregar",
+                            "host": [
+                                "{{base_url}}"
+                            ],
+                            "path": [
+                                "v1",
+                                "pedidos",
+                                "{{pedido_id}}",
+                                "entregar"
+                            ]
+                        },
+                        "description": "PRONTO -> ENTREGUE."
+                    },
+                    "event": [
+                        {
+                            "listen": "test",
+                            "script": {
+                                "exec": [
+                                    "pm.test('Status 200', () => pm.response.to.have.status(200));"
+                                ],
+                                "type": "text/javascript"
+                            }
+                        }
+                    ]
+                },
+                {
+                    "name": "Cancelar pedido",
+                    "request": {
+                        "method": "POST",
+                        "header": [
+                            {
+                                "key": "Authorization",
+                                "value": "Bearer {{token_operador}}"
+                            }
+                        ],
+                        "url": {
+                            "raw": "{{base_url}}/v1/pedidos/{{pedido_id}}/cancelar",
+                            "host": [
+                                "{{base_url}}"
+                            ],
+                            "path": [
+                                "v1",
+                                "pedidos",
+                                "{{pedido_id}}",
+                                "cancelar"
+                            ]
+                        },
+                        "description": "Cancela o pedido (operacao sensivel: auditada). So e valido em estados que permitem cancelamento."
+                    },
+                    "event": [
+                        {
+                            "listen": "test",
+                            "script": {
+                                "exec": [
+                                    "pm.test('Status 200 ou 409', () => pm.expect([200,409]).to.include(pm.response.code));"
+                                ],
+                                "type": "text/javascript"
+                            }
+                        }
+                    ]
+                },
+                {
+                    "name": "Aplicar desconto",
+                    "request": {
+                        "method": "POST",
+                        "header": [
+                            {
+                                "key": "Content-Type",
+                                "value": "application/json"
+                            },
+                            {
+                                "key": "Authorization",
+                                "value": "Bearer {{token_operador}}"
+                            }
+                        ],
+                        "url": {
+                            "raw": "{{base_url}}/v1/pedidos/{{pedido_id}}/desconto",
+                            "host": [
+                                "{{base_url}}"
+                            ],
+                            "path": [
+                                "v1",
+                                "pedidos",
+                                "{{pedido_id}}",
+                                "desconto"
+                            ]
+                        },
+                        "body": {
+                            "mode": "raw",
+                            "raw": "{\n  \"percentual\": \"10\",\n  \"motivo\": \"cortesia\"\n}",
+                            "options": {
+                                "raw": {
+                                    "language": "json"
+                                }
+                            }
+                        },
+                        "description": "Desconto antes do pagamento (auditado). Em pedido ja pago retorna 409."
+                    },
+                    "event": [
+                        {
+                            "listen": "test",
+                            "script": {
+                                "exec": [
+                                    "pm.test('Status 200 ou 409', () => pm.expect([200,409]).to.include(pm.response.code));"
+                                ],
+                                "type": "text/javascript"
+                            }
+                        }
+                    ]
+                },
+                {
+                    "name": "Fila da cozinha",
+                    "request": {
+                        "method": "GET",
+                        "header": [
+                            {
+                                "key": "Authorization",
+                                "value": "Bearer {{token_operador}}"
+                            }
+                        ],
+                        "url": {
+                            "raw": "{{base_url}}/v1/unidades/{{unidade_id}}/fila",
+                            "host": [
+                                "{{base_url}}"
+                            ],
+                            "path": [
+                                "v1",
+                                "unidades",
+                                "{{unidade_id}}",
+                                "fila"
+                            ]
+                        },
+                        "description": "Pedidos pagos/em preparo/prontos na unidade (painel KDS)."
+                    },
+                    "event": [
+                        {
+                            "listen": "test",
+                            "script": {
+                                "exec": [
+                                    "pm.test('Status 200', () => pm.response.to.have.status(200));"
+                                ],
+                                "type": "text/javascript"
+                            }
+                        }
+                    ]
+                }
+            ]
+        },
+        {
+            "name": "Webhook de Pagamento",
+            "description": "O pre-request script calcula o HMAC-SHA256 do body com `webhook_secret` e coloca em `X-Signature`. Garanta que `webhook_secret` na collection bate com PAYMENT_WEBHOOK_SECRET do .env.\n\n`idempotency_key` e `id_transacao_externa` nao precisam ser inventados: rode uma requisicao em Pedidos -> Criar pedido antes, que ja salva esses valores reais (pagamento_idempotency_key / pagamento_id_transacao_externa) usados automaticamente abaixo.",
+            "item": [
+                {
+                    "name": "Confirmar pagamento aprovado",
+                    "request": {
+                        "method": "POST",
+                        "header": [
+                            {
+                                "key": "Content-Type",
+                                "value": "application/json"
+                            },
+                            {
+                                "key": "X-Signature",
+                                "value": "{{x_signature}}",
+                                "description": "Gerado pelo pre-request script"
+                            }
+                        ],
+                        "body": {
+                            "mode": "raw",
+                            "raw": "{\n  \"idempotency_key\": \"{{pagamento_idempotency_key}}\",\n  \"id_transacao_externa\": \"{{pagamento_id_transacao_externa}}\",\n  \"pedido_id\": \"{{pedido_id}}\",\n  \"status\": \"APROVADO\",\n  \"valor\": 47.30,\n  \"ocorrido_em\": \"2026-06-15T12:00:00Z\"\n}",
+                            "options": {
+                                "raw": {
+                                    "language": "json"
+                                }
+                            }
+                        },
+                        "url": {
+                            "raw": "{{base_url}}/v1/webhooks/pagamento",
+                            "host": [
+                                "{{base_url}}"
+                            ],
+                            "path": [
+                                "v1",
+                                "webhooks",
+                                "pagamento"
+                            ]
+                        },
+                        "description": "Simula o gateway confirmando o pagamento. O pedido passa de AGUARDANDO_PAGAMENTO para PAGO."
+                    },
+                    "event": [
+                        {
+                            "listen": "prerequest",
+                            "script": {
+                                "exec": [
+                                    "const secret = pm.collectionVariables.get('webhook_secret');",
+                                    "const body = pm.variables.replaceIn(pm.request.body.raw); // resolve {{variaveis}} antes de assinar",
+                                    "const signature = CryptoJS.HmacSHA256(body, secret).toString(CryptoJS.enc.Hex);",
+                                    "pm.collectionVariables.set('x_signature', signature);",
+                                    "console.log('X-Signature calculado:', signature);"
+                                ],
+                                "type": "text/javascript"
+                            }
+                        },
+                        {
+                            "listen": "test",
+                            "script": {
+                                "exec": [
+                                    "pm.test('Status 200', () => pm.response.to.have.status(200));",
+                                    "pm.test('novo_status = PAGO', () => {",
+                                    "    pm.expect(pm.response.json().novo_status).to.eql('PAGO');",
+                                    "});",
+                                    "pm.test('recebido = true', () => {",
+                                    "    pm.expect(pm.response.json().recebido).to.be.true;",
+                                    "});"
+                                ],
+                                "type": "text/javascript"
+                            }
+                        }
+                    ]
+                },
+                {
+                    "name": "Reenviar webhook (idempotencia)",
+                    "request": {
+                        "method": "POST",
+                        "header": [
+                            {
+                                "key": "Content-Type",
+                                "value": "application/json"
+                            },
+                            {
+                                "key": "X-Signature",
+                                "value": "{{x_signature}}"
+                            }
+                        ],
+                        "body": {
+                            "mode": "raw",
+                            "raw": "{\n  \"idempotency_key\": \"{{pagamento_idempotency_key}}\",\n  \"id_transacao_externa\": \"{{pagamento_id_transacao_externa}}\",\n  \"pedido_id\": \"{{pedido_id}}\",\n  \"status\": \"APROVADO\",\n  \"valor\": 47.30,\n  \"ocorrido_em\": \"2026-06-15T12:00:00Z\"\n}",
+                            "options": {
+                                "raw": {
+                                    "language": "json"
+                                }
+                            }
+                        },
+                        "url": {
+                            "raw": "{{base_url}}/v1/webhooks/pagamento",
+                            "host": [
+                                "{{base_url}}"
+                            ],
+                            "path": [
+                                "v1",
+                                "webhooks",
+                                "pagamento"
+                            ]
+                        },
+                        "description": "Mesmo evento do request anterior. Deve retornar 200 sem mudar o estado de novo."
+                    },
+                    "event": [
+                        {
+                            "listen": "prerequest",
+                            "script": {
+                                "exec": [
+                                    "const secret = pm.collectionVariables.get('webhook_secret');",
+                                    "const body = pm.variables.replaceIn(pm.request.body.raw); // resolve {{variaveis}} antes de assinar",
+                                    "const signature = CryptoJS.HmacSHA256(body, secret).toString(CryptoJS.enc.Hex);",
+                                    "pm.collectionVariables.set('x_signature', signature);"
+                                ],
+                                "type": "text/javascript"
+                            }
+                        },
+                        {
+                            "listen": "test",
+                            "script": {
+                                "exec": [
+                                    "pm.test('200 idempotente', () => pm.response.to.have.status(200));",
+                                    "pm.test('recebido true', () => pm.expect(pm.response.json().recebido).to.be.true);"
+                                ],
+                                "type": "text/javascript"
+                            }
+                        }
+                    ]
+                },
+                {
+                    "name": "Confirmar pagamento recusado",
+                    "request": {
+                        "method": "POST",
+                        "header": [
+                            {
+                                "key": "Content-Type",
+                                "value": "application/json"
+                            },
+                            {
+                                "key": "X-Signature",
+                                "value": "{{x_signature}}"
+                            }
+                        ],
+                        "body": {
+                            "mode": "raw",
+                            "raw": "{\n  \"idempotency_key\": \"{{pagamento_idempotency_key}}\",\n  \"id_transacao_externa\": \"{{pagamento_id_transacao_externa}}\",\n  \"pedido_id\": \"{{pedido_id}}\",\n  \"status\": \"RECUSADO\",\n  \"valor\": 47.30,\n  \"ocorrido_em\": \"2026-06-15T12:05:00Z\"\n}",
+                            "options": {
+                                "raw": {
+                                    "language": "json"
+                                }
+                            }
+                        },
+                        "url": {
+                            "raw": "{{base_url}}/v1/webhooks/pagamento",
+                            "host": [
+                                "{{base_url}}"
+                            ],
+                            "path": [
+                                "v1",
+                                "webhooks",
+                                "pagamento"
+                            ]
+                        },
+                        "description": "Crie um pedido novo antes deste request. Um pedido já PAGO não aceita RECUSADO (vira 409)."
+                    },
+                    "event": [
+                        {
+                            "listen": "prerequest",
+                            "script": {
+                                "exec": [
+                                    "const secret = pm.collectionVariables.get('webhook_secret');",
+                                    "const body = pm.variables.replaceIn(pm.request.body.raw); // resolve {{variaveis}} antes de assinar",
+                                    "const signature = CryptoJS.HmacSHA256(body, secret).toString(CryptoJS.enc.Hex);",
+                                    "pm.collectionVariables.set('x_signature', signature);"
+                                ],
+                                "type": "text/javascript"
+                            }
+                        },
+                        {
+                            "listen": "test",
+                            "script": {
+                                "exec": [
+                                    "pm.test('Status 200', () => pm.response.to.have.status(200));",
+                                    "pm.test('novo_status = PAGAMENTO_RECUSADO', () => {",
+                                    "    pm.expect(pm.response.json().novo_status).to.eql('PAGAMENTO_RECUSADO');",
+                                    "});"
+                                ],
+                                "type": "text/javascript"
+                            }
+                        }
+                    ]
+                },
+                {
+                    "name": "Webhook com transicao invalida",
+                    "request": {
+                        "method": "POST",
+                        "header": [
+                            {
+                                "key": "Content-Type",
+                                "value": "application/json"
+                            },
+                            {
+                                "key": "X-Signature",
+                                "value": "{{x_signature}}"
+                            }
+                        ],
+                        "body": {
+                            "mode": "raw",
+                            "raw": "{\n  \"idempotency_key\": \"{{pagamento_idempotency_key}}\",\n  \"id_transacao_externa\": \"{{pagamento_id_transacao_externa}}\",\n  \"pedido_id\": \"{{pedido_id}}\",\n  \"status\": \"RECUSADO\",\n  \"valor\": 47.30,\n  \"ocorrido_em\": \"2026-06-15T12:10:00Z\"\n}",
+                            "options": {
+                                "raw": {
+                                    "language": "json"
+                                }
+                            }
+                        },
+                        "url": {
+                            "raw": "{{base_url}}/v1/webhooks/pagamento",
+                            "host": [
+                                "{{base_url}}"
+                            ],
+                            "path": [
+                                "v1",
+                                "webhooks",
+                                "pagamento"
+                            ]
+                        },
+                        "description": "Use com um pedido já PAGO. Tentar RECUSADO num pedido PAGO é transição inválida → 409."
+                    },
+                    "event": [
+                        {
+                            "listen": "prerequest",
+                            "script": {
+                                "exec": [
+                                    "const secret = pm.collectionVariables.get('webhook_secret');",
+                                    "const body = pm.variables.replaceIn(pm.request.body.raw); // resolve {{variaveis}} antes de assinar",
+                                    "const signature = CryptoJS.HmacSHA256(body, secret).toString(CryptoJS.enc.Hex);",
+                                    "pm.collectionVariables.set('x_signature', signature);"
+                                ],
+                                "type": "text/javascript"
+                            }
+                        },
+                        {
+                            "listen": "test",
+                            "script": {
+                                "exec": [
+                                    "pm.test('409 Conflict - transição inválida', () => pm.response.to.have.status(409));"
+                                ],
+                                "type": "text/javascript"
+                            }
+                        }
+                    ]
+                },
+                {
+                    "name": "Webhook com assinatura invalida",
+                    "request": {
+                        "method": "POST",
+                        "header": [
+                            {
+                                "key": "Content-Type",
+                                "value": "application/json"
+                            },
+                            {
+                                "key": "X-Signature",
+                                "value": "assinatura_incorreta_qualquer_coisa"
+                            }
+                        ],
+                        "body": {
+                            "mode": "raw",
+                            "raw": "{\n  \"idempotency_key\": \"evt_sem_assinatura_001\",\n  \"id_transacao_externa\": \"tx_pix_999\",\n  \"pedido_id\": \"{{pedido_id}}\",\n  \"status\": \"APROVADO\",\n  \"valor\": 47.30,\n  \"ocorrido_em\": \"2026-06-15T12:15:00Z\"\n}",
+                            "options": {
+                                "raw": {
+                                    "language": "json"
+                                }
+                            }
+                        },
+                        "url": {
+                            "raw": "{{base_url}}/v1/webhooks/pagamento",
+                            "host": [
+                                "{{base_url}}"
+                            ],
+                            "path": [
+                                "v1",
+                                "webhooks",
+                                "pagamento"
+                            ]
+                        },
+                        "description": "X-Signature errada deve retornar 401 sem alterar nada no banco."
+                    },
+                    "event": [
+                        {
+                            "listen": "test",
+                            "script": {
+                                "exec": [
+                                    "pm.test('401 Unauthorized', () => pm.response.to.have.status(401));"
+                                ],
+                                "type": "text/javascript"
+                            }
+                        }
+                    ]
+                }
+            ]
+        },
+        {
+            "name": "Clientes",
+            "description": "Cadastro e dados do cliente. As rotas por id usam token_cliente (rode Login cliente) e usuario_id do seed.",
+            "item": [
+                {
+                    "name": "Cadastrar cliente",
+                    "request": {
+                        "method": "POST",
+                        "header": [
+                            {
+                                "key": "Content-Type",
+                                "value": "application/json"
+                            }
+                        ],
+                        "url": {
+                            "raw": "{{base_url}}/v1/clientes",
+                            "host": [
+                                "{{base_url}}"
+                            ],
+                            "path": [
+                                "v1",
+                                "clientes"
+                            ]
+                        },
+                        "body": {
+                            "mode": "raw",
+                            "raw": "{\n  \"nome\": \"Maria Teste\",\n  \"email\": \"maria.teste@example.com\",\n  \"senha\": \"segredo1\",\n  \"cpf\": \"98765432100\"\n}",
+                            "options": {
+                                "raw": {
+                                    "language": "json"
+                                }
+                            }
+                        },
+                        "description": "Auto-cadastro publico de cliente (uso pelo app)."
+                    },
+                    "event": [
+                        {
+                            "listen": "test",
+                            "script": {
+                                "exec": [
+                                    "pm.test('Status 201', () => pm.response.to.have.status(201));"
+                                ],
+                                "type": "text/javascript"
+                            }
+                        }
+                    ]
+                },
+                {
+                    "name": "Consultar cliente",
+                    "request": {
+                        "method": "GET",
+                        "header": [
+                            {
+                                "key": "Authorization",
+                                "value": "Bearer {{token_cliente}}"
+                            }
+                        ],
+                        "url": {
+                            "raw": "{{base_url}}/v1/clientes/{{usuario_id}}",
+                            "host": [
+                                "{{base_url}}"
+                            ],
+                            "path": [
+                                "v1",
+                                "clientes",
+                                "{{usuario_id}}"
+                            ]
+                        },
+                        "description": "Le os proprios dados (self) ou, como admin, de qualquer cliente."
+                    },
+                    "event": [
+                        {
+                            "listen": "test",
+                            "script": {
+                                "exec": [
+                                    "pm.test('Status 200', () => pm.response.to.have.status(200));"
+                                ],
+                                "type": "text/javascript"
+                            }
+                        }
+                    ]
+                },
+                {
+                    "name": "Atualizar cliente",
+                    "request": {
+                        "method": "PUT",
+                        "header": [
+                            {
+                                "key": "Content-Type",
+                                "value": "application/json"
+                            },
+                            {
+                                "key": "Authorization",
+                                "value": "Bearer {{token_cliente}}"
+                            }
+                        ],
+                        "url": {
+                            "raw": "{{base_url}}/v1/clientes/{{usuario_id}}",
+                            "host": [
+                                "{{base_url}}"
+                            ],
+                            "path": [
+                                "v1",
+                                "clientes",
+                                "{{usuario_id}}"
+                            ]
+                        },
+                        "body": {
+                            "mode": "raw",
+                            "raw": "{\n  \"nome\": \"Cliente Demo Atualizado\"\n}",
+                            "options": {
+                                "raw": {
+                                    "language": "json"
+                                }
+                            }
+                        },
+                        "description": "Atualiza os proprios dados."
+                    },
+                    "event": [
+                        {
+                            "listen": "test",
+                            "script": {
+                                "exec": [
+                                    "pm.test('Status 200', () => pm.response.to.have.status(200));"
+                                ],
+                                "type": "text/javascript"
+                            }
+                        }
+                    ]
+                },
+                {
+                    "name": "Historico de pedidos",
+                    "request": {
+                        "method": "GET",
+                        "header": [
+                            {
+                                "key": "Authorization",
+                                "value": "Bearer {{token_cliente}}"
+                            }
+                        ],
+                        "url": {
+                            "raw": "{{base_url}}/v1/clientes/{{usuario_id}}/pedidos",
+                            "host": [
+                                "{{base_url}}"
+                            ],
+                            "path": [
+                                "v1",
+                                "clientes",
+                                "{{usuario_id}}",
+                                "pedidos"
+                            ]
+                        },
+                        "description": "Lista os pedidos do cliente."
+                    },
+                    "event": [
+                        {
+                            "listen": "test",
+                            "script": {
+                                "exec": [
+                                    "pm.test('Status 200', () => pm.response.to.have.status(200));"
+                                ],
+                                "type": "text/javascript"
+                            }
+                        }
+                    ]
+                },
+                {
+                    "name": "Anonimizar cliente (LGPD)",
+                    "request": {
+                        "method": "DELETE",
+                        "header": [
+                            {
+                                "key": "Authorization",
+                                "value": "Bearer {{token_cliente}}"
+                            }
+                        ],
+                        "url": {
+                            "raw": "{{base_url}}/v1/clientes/{{usuario_id}}",
+                            "host": [
+                                "{{base_url}}"
+                            ],
+                            "path": [
+                                "v1",
+                                "clientes",
+                                "{{usuario_id}}"
+                            ]
+                        },
+                        "description": "ATENCAO: remove os dados pessoais do cliente demo (direito ao esquecimento). Rode por ultimo."
+                    },
+                    "event": [
+                        {
+                            "listen": "test",
+                            "script": {
+                                "exec": [
+                                    "pm.test('Status 200', () => pm.response.to.have.status(200));"
+                                ],
+                                "type": "text/javascript"
+                            }
+                        }
+                    ]
+                }
+            ]
+        },
+        {
+            "name": "LGPD - Consentimentos",
+            "item": [
+                {
+                    "name": "Registrar consentimento de fidelidade",
+                    "request": {
+                        "method": "POST",
+                        "header": [
+                            {
+                                "key": "Content-Type",
+                                "value": "application/json"
+                            },
+                            {
+                                "key": "Authorization",
+                                "value": "Bearer {{token_cliente}}"
+                            }
+                        ],
+                        "body": {
+                            "mode": "raw",
+                            "raw": "{\n  \"finalidade\": \"FIDELIDADE\",\n  \"base_legal\": \"CONSENTIMENTO\",\n  \"concedido\": true,\n  \"canal_coleta\": \"APP\",\n  \"versao_termo\": \"v2.1\"\n}",
+                            "options": {
+                                "raw": {
+                                    "language": "json"
+                                }
+                            }
+                        },
+                        "url": {
+                            "raw": "{{base_url}}/v1/clientes/{{usuario_id}}/consentimentos",
+                            "host": [
+                                "{{base_url}}"
+                            ],
+                            "path": [
+                                "v1",
+                                "clientes",
+                                "{{usuario_id}}",
+                                "consentimentos"
+                            ]
+                        },
+                        "description": "Registra consentimento para acúmulo de pontos. O consentimento_id é salvo automaticamente."
+                    },
+                    "event": [
+                        {
+                            "listen": "test",
+                            "script": {
+                                "exec": [
+                                    "pm.test('Status 201', () => pm.response.to.have.status(201));",
+                                    "",
+                                    "const json = pm.response.json();",
+                                    "",
+                                    "pm.test('Status CONCEDIDO', () => pm.expect(json.status).to.eql('CONCEDIDO'));",
+                                    "pm.test('Finalidade correta', () => pm.expect(json.finalidade).to.eql('FIDELIDADE'));",
+                                    "",
+                                    "if (json.consentimento_id) {",
+                                    "    pm.collectionVariables.set('consentimento_id', json.consentimento_id);",
+                                    "    console.log('consentimento_id salvo:', json.consentimento_id);",
+                                    "}"
+                                ],
+                                "type": "text/javascript"
+                            }
+                        }
+                    ]
+                },
+                {
+                    "name": "Registrar consentimento de marketing",
+                    "request": {
+                        "method": "POST",
+                        "header": [
+                            {
+                                "key": "Content-Type",
+                                "value": "application/json"
+                            },
+                            {
+                                "key": "Authorization",
+                                "value": "Bearer {{token_cliente}}"
+                            }
+                        ],
+                        "body": {
+                            "mode": "raw",
+                            "raw": "{\n  \"finalidade\": \"MARKETING_SEGMENTADO\",\n  \"base_legal\": \"CONSENTIMENTO\",\n  \"concedido\": true,\n  \"canal_coleta\": \"APP\",\n  \"versao_termo\": \"v2.1\"\n}",
+                            "options": {
+                                "raw": {
+                                    "language": "json"
+                                }
+                            }
+                        },
+                        "url": {
+                            "raw": "{{base_url}}/v1/clientes/{{usuario_id}}/consentimentos",
+                            "host": [
+                                "{{base_url}}"
+                            ],
+                            "path": [
+                                "v1",
+                                "clientes",
+                                "{{usuario_id}}",
+                                "consentimentos"
+                            ]
+                        },
+                        "description": "Registra consentimento para marketing segmentado."
+                    },
+                    "event": [
+                        {
+                            "listen": "test",
+                            "script": {
+                                "exec": [
+                                    "pm.test('Status 201', () => pm.response.to.have.status(201));",
+                                    "pm.test('Status CONCEDIDO', () => pm.expect(pm.response.json().status).to.eql('CONCEDIDO'));"
+                                ],
+                                "type": "text/javascript"
+                            }
+                        }
+                    ]
+                },
+                {
+                    "name": "Revogar consentimento",
+                    "request": {
+                        "method": "DELETE",
+                        "header": [
+                            {
+                                "key": "Authorization",
+                                "value": "Bearer {{token_cliente}}"
+                            }
+                        ],
+                        "url": {
+                            "raw": "{{base_url}}/v1/clientes/{{usuario_id}}/consentimentos/{{consentimento_id}}",
+                            "host": [
+                                "{{base_url}}"
+                            ],
+                            "path": [
+                                "v1",
+                                "clientes",
+                                "{{usuario_id}}",
+                                "consentimentos",
+                                "{{consentimento_id}}"
+                            ]
+                        },
+                        "description": "Revoga o consentimento registrado antes. Gera registro em AUDIT_LOG."
+                    },
+                    "event": [
+                        {
+                            "listen": "test",
+                            "script": {
+                                "exec": [
+                                    "pm.test('Status 200', () => pm.response.to.have.status(200));",
+                                    "pm.test('Status REVOGADO', () => pm.expect(pm.response.json().status).to.eql('REVOGADO'));",
+                                    "pm.test('revogado_em preenchido', () => {",
+                                    "    pm.expect(pm.response.json().revogado_em).to.not.be.null;",
+                                    "});"
+                                ],
+                                "type": "text/javascript"
+                            }
+                        }
+                    ]
+                },
+                {
+                    "name": "Revogar consentimento ja revogado",
+                    "request": {
+                        "method": "DELETE",
+                        "header": [
+                            {
+                                "key": "Authorization",
+                                "value": "Bearer {{token_cliente}}"
+                            }
+                        ],
+                        "url": {
+                            "raw": "{{base_url}}/v1/clientes/{{usuario_id}}/consentimentos/{{consentimento_id}}",
+                            "host": [
+                                "{{base_url}}"
+                            ],
+                            "path": [
+                                "v1",
+                                "clientes",
+                                "{{usuario_id}}",
+                                "consentimentos",
+                                "{{consentimento_id}}"
+                            ]
+                        },
+                        "description": "Revogar de novo o mesmo consentimento deve retornar 409."
+                    },
+                    "event": [
+                        {
+                            "listen": "test",
+                            "script": {
+                                "exec": [
+                                    "pm.test('409 Conflict - já revogado', () => pm.response.to.have.status(409));"
+                                ],
+                                "type": "text/javascript"
+                            }
+                        }
+                    ]
+                },
+                {
+                    "name": "Registrar consentimento de cliente inexistente",
+                    "request": {
+                        "method": "POST",
+                        "header": [
+                            {
+                                "key": "Content-Type",
+                                "value": "application/json"
+                            },
+                            {
+                                "key": "Authorization",
+                                "value": "Bearer {{token_admin}}"
+                            }
+                        ],
+                        "body": {
+                            "mode": "raw",
+                            "raw": "{\n  \"finalidade\": \"FIDELIDADE\",\n  \"base_legal\": \"CONSENTIMENTO\",\n  \"concedido\": true,\n  \"canal_coleta\": \"APP\",\n  \"versao_termo\": \"v2.1\"\n}",
+                            "options": {
+                                "raw": {
+                                    "language": "json"
+                                }
+                            }
+                        },
+                        "url": {
+                            "raw": "{{base_url}}/v1/clientes/00000000-0000-0000-0000-000000000000/consentimentos",
+                            "host": [
+                                "{{base_url}}"
+                            ],
+                            "path": [
+                                "v1",
+                                "clientes",
+                                "00000000-0000-0000-0000-000000000000",
+                                "consentimentos"
+                            ]
+                        },
+                        "description": "Cliente que não existe deve retornar 404."
+                    },
+                    "event": [
+                        {
+                            "listen": "test",
+                            "script": {
+                                "exec": [
+                                    "pm.test('404 Not Found', () => pm.response.to.have.status(404));"
+                                ],
+                                "type": "text/javascript"
+                            }
+                        }
+                    ]
+                }
+            ]
+        },
+        {
+            "name": "Relatorios (matriz)",
+            "description": "Indicadores centralizados. Requer token_admin.",
+            "item": [
+                {
+                    "name": "Vendas por unidade",
+                    "request": {
+                        "method": "GET",
+                        "header": [
+                            {
+                                "key": "Authorization",
+                                "value": "Bearer {{token_admin}}"
+                            }
+                        ],
+                        "url": {
+                            "raw": "{{base_url}}/v1/relatorios/vendas",
+                            "host": [
+                                "{{base_url}}"
+                            ],
+                            "path": [
+                                "v1",
+                                "relatorios",
+                                "vendas"
+                            ]
+                        },
+                        "description": "Faturamento, total de pedidos e ticket medio por unidade."
+                    },
+                    "event": [
+                        {
+                            "listen": "test",
+                            "script": {
+                                "exec": [
+                                    "pm.test('Status 200', () => pm.response.to.have.status(200));"
+                                ],
+                                "type": "text/javascript"
+                            }
+                        }
+                    ]
+                },
+                {
+                    "name": "Vendas filtradas por unidade",
+                    "request": {
+                        "method": "GET",
+                        "header": [
+                            {
+                                "key": "Authorization",
+                                "value": "Bearer {{token_admin}}"
+                            }
+                        ],
+                        "url": {
+                            "raw": "{{base_url}}/v1/relatorios/vendas?unidade_id={{unidade_id}}",
+                            "host": [
+                                "{{base_url}}"
+                            ],
+                            "path": [
+                                "v1",
+                                "relatorios",
+                                "vendas"
+                            ],
+                            "query": [
+                                {
+                                    "key": "unidade_id",
+                                    "value": "{{unidade_id}}"
+                                }
+                            ]
+                        },
+                        "description": "Mesmo relatorio filtrado por uma unidade."
+                    },
+                    "event": [
+                        {
+                            "listen": "test",
+                            "script": {
+                                "exec": [
+                                    "pm.test('Status 200', () => pm.response.to.have.status(200));"
+                                ],
+                                "type": "text/javascript"
+                            }
+                        }
+                    ]
+                }
+            ]
+        }
+    ]
+}
